@@ -59,14 +59,14 @@ func (s *Server) AddListener(l listeners.Listener) error {
 
 	s.Listeners.Add(l)
 
-	s.Log.Info("attached listener", "id", l.ID(), "protocol", l.Protocol(), "address", l.Address())
+	s.Log.Info("[server][AddListener] attached listener", "id", l.ID(), "protocol", l.Protocol(), "address", l.Address())
 	return nil
 }
 
 // Serve 服务开始运行
 func (s *Server) Serve() error {
-	s.Log.Info("im serve starting")
-	defer s.Log.Info("im server started")
+	s.Log.Info("[server][Serve] im serve starting")
+	defer s.Log.Info("[server][Serve] im server started")
 
 	s.Listeners.ServeAll(s.EstablishConnection) // start listening on all listeners.
 
@@ -76,10 +76,10 @@ func (s *Server) Serve() error {
 // Close 关闭所有监听器
 func (s *Server) Close() error {
 	close(s.done)
-	s.Log.Info("gracefully stopping server")
+	s.Log.Info("[server][Close] gracefully stopping server")
 	s.Listeners.CloseAll()
 
-	s.Log.Info("im server stopped")
+	s.Log.Info("[server][Close] im server stopped")
 	return nil
 }
 
@@ -97,7 +97,7 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 		loginInfo, err = protocol.VerifyLogin(message)
 		loginResponse := &pb.ResponsePack{
 			Code:    0,
-			Payload: "",
+			Payload: "登录成功",
 		}
 		if err != nil {
 			loginResponse.Code = 1
@@ -106,8 +106,10 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 
 		// 回复客户端登录成功或者失败
 		loginResponseData, err2 := protocol.Response("0", loginResponse)
-		if err2 != nil {
+		if err2 == nil {
 			c.WriteMessage(loginResponseData)
+		} else {
+			s.Log.Error("[server][EstablishConnection] 登录消息组装失败", "rrror", err2.Error())
 		}
 
 		return err
@@ -147,7 +149,7 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 
 			if ok {
 				// 修改为服务端时间戳
-				packData.Timestamp = uint32(time.Now().UnixNano())
+				packData.Timestamp = uint64(time.Now().UnixNano())
 				// 重新编码
 				data, err := protocol.Encode(packData)
 

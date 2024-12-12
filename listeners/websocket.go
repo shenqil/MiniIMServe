@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -103,13 +104,14 @@ func (l *Websocket) handler(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 
 	var wg sync.WaitGroup
-	conn := &wsConn{listener: l.id, c: c, chMsg: make(chan []byte, 10), wgClose: &wg}
+	conn := &wsConn{listener: l.id, c: c, chMsg: make(chan []byte, 10), wgClose: &wg, Log: l.log}
+
 	wg.Add(1)
 	go conn.LoopTask()
 
 	err = l.establish(l.id, conn)
 	if err != nil {
-		l.log.Warn("", "error", err)
+		conn.Log.Warn("[websocket][handler]", "error", err)
 	}
 }
 
@@ -126,7 +128,7 @@ func (l *Websocket) Serve(establish EstablishFn) {
 
 	// After the listener has been shutdown, no need to print the http.ErrServerClosed error.
 	if err != nil && atomic.LoadUint32(&l.end) == 0 {
-		l.log.Error("failed to serve.", "error", err, "listener", l.id)
+		l.log.Error("[websocket] failed to serve.", "error", err, "listener", l.id)
 	}
 }
 
@@ -161,7 +163,7 @@ func (ws *wsConn) Init(clientId uint32, clientType uint32, log *slog.Logger) err
 	ws.clientType = clientType
 	ws.Log = log
 
-	ws.Log.Info("wsConn Init")
+	ws.Log.Info("[websocket][Init]")
 
 	return nil
 }
@@ -210,6 +212,9 @@ func (ws *wsConn) WriteMessage(data []byte) error {
 
 // Close 客户端关闭
 func (ws *wsConn) Close() error {
+
+	ws.Log.Info("[websocket][Close]")
+
 	// 安全的关闭
 	ws.wgClose.Wait()
 	close(ws.chMsg)
@@ -220,16 +225,21 @@ func (ws *wsConn) Close() error {
 // LoopTask 循环任务
 func (ws *wsConn) LoopTask() {
 	defer ws.wgClose.Done()
+
+	ws.Log.Info("[websocket][LoopTask]")
+
 	for {
 		val, ok := <-ws.chMsg
 		if !ok {
-			ws.Log.Info("Channel closed, exiting consumer.")
+			ws.Log.Info("[websocket]LoopTask] Channel closed, exiting consumer.")
 			break
 		}
 
+		ws.Log.Info("[websocket][LoopTask] Send message", "Len", strconv.Itoa(len(val)))
+
 		err := ws.c.WriteMessage(websocket.BinaryMessage, val)
 		if err != nil {
-			ws.Log.Error(err.Error())
+			ws.Log.Error("[websocket][LoopTask] Send message", "err", err.Error())
 			break
 		}
 	}

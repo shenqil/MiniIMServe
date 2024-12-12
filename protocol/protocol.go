@@ -60,6 +60,10 @@ func VerifyLogin(data []byte) (*pb.LoginPack, error) {
 		return nil, err
 	}
 
+	if loginInfo.Password == "" {
+		return nil, ErrLoginFailed
+	}
+
 	return loginInfo, nil
 }
 
@@ -73,7 +77,7 @@ func Response(id string, data *pb.ResponsePack) ([]byte, error) {
 	packData := &pb.PackData{
 		Id:        id,
 		Type:      pb.PackType_RESPONSE,
-		Timestamp: uint32(time.Now().UnixNano()),
+		Timestamp: uint64(time.Now().UnixNano()),
 		Payload:   payload,
 	}
 

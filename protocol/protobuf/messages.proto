@@ -80,7 +80,7 @@ enum PackType {
   uint32 to = 3; // 接收者
   PackType type = 4; // 消息类型
   bytes payload = 5; // 消息内容
-  uint32 timestamp = 6; // 时间戳
+  uint64 timestamp = 6; // 时间戳
 }
 
 /**
