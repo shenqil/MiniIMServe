@@ -104,7 +104,7 @@ func (l *Websocket) handler(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 
 	var wg sync.WaitGroup
-	conn := &wsConn{listener: l.id, c: c, chMsg: make(chan []byte, 10), wgClose: &wg, Log: l.log}
+	conn := &wsConn{listener: l.id, c: c, chMsg: make(chan []byte, 1000), wgClose: &wg, Log: l.log}
 
 	wg.Add(1)
 	go conn.LoopTask()
@@ -163,8 +163,6 @@ func (ws *wsConn) Init(clientId uint32, clientType uint32, log *slog.Logger) err
 	ws.clientType = clientType
 	ws.Log = log
 
-	ws.Log.Info("[websocket][Init]")
-
 	return nil
 }
 
@@ -201,13 +199,14 @@ func (ws *wsConn) ReadMessage() ([]byte, error) {
 // WriteMessage 写入一条消息
 func (ws *wsConn) WriteMessage(data []byte) error {
 
-	ws.wgClose.Add(1)
-	go func() {
-		defer ws.wgClose.Done()
-		ws.chMsg <- data
-	}()
+	select {
+	case ws.chMsg <- data:
+		return nil
+	default:
+		ws.Log.Error("[websocket] The message failed to be sent")
+		return errors.New("channel close")
+	}
 
-	return nil
 }
 
 // Close 客户端关闭

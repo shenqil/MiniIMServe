@@ -67,6 +67,8 @@ func VerifyLogin(data []byte) (*pb.LoginPack, error) {
 	return loginInfo, nil
 }
 
+
+
 // Response 数据响应
 func Response(id string, data *pb.ResponsePack) ([]byte, error) {
 	payload, err := proto.Marshal(data)

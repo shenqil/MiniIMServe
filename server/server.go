@@ -105,7 +105,7 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 		}
 
 		// 回复客户端登录成功或者失败
-		loginResponseData, err2 := protocol.Response("0", loginResponse)
+		loginResponseData, err2 := protocol.Response(strconv.Itoa(int(pb.PackType_LOGIN)), loginResponse)
 		if err2 == nil {
 			c.WriteMessage(loginResponseData)
 		} else {
@@ -116,12 +116,15 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 	}()
 
 	if err != nil {
+		s.Log.Error("[server][EstablishConnection] 登录失败", "listener", listener, "err", err)
 		return err
 	}
 
 	// 2.登录成功初始化数据
 	nl := s.Log.With(slog.String("listener", listener), slog.String("clientId", strconv.Itoa(int(loginInfo.Uid))), slog.String("clientType", strconv.Itoa(int(loginInfo.ClientType))))
 	c.Init(loginInfo.Uid, loginInfo.ClientType, nl)
+
+	nl.Info("[server][EstablishConnection] 登录成功")
 
 	// 保存当前客户端
 	s.Clients.Add(c)
@@ -134,6 +137,8 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 		if err != nil {
 			break
 		}
+
+		nl.Info("[server][EstablishConnection][ReadMessage]", "len", len(message))
 		packData, err := protocol.Decode(message)
 
 		if err != nil {
@@ -141,9 +146,10 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 			continue
 		}
 
+		// 消息分发
 		switch packData.Type {
 
-		// 消息转发
+		// 1.消息转发
 		case pb.PackType_MESSAGE:
 			clients, ok := s.Clients.Get(packData.To)
 
@@ -160,7 +166,24 @@ func (s *Server) EstablishConnection(listener string, c clients.Client) error {
 				}
 
 			}
+
+		// 2.退出登录
+		case pb.PackType_LOGOUT:
+			nl.Info("[server][EstablishConnection][logout]")
+			logoutResponse := &pb.ResponsePack{
+				Code:    0,
+				Payload: "",
+			}
+
+			logoutResponseData, err := protocol.Response(strconv.Itoa(int(pb.PackType_LOGOUT)), logoutResponse)
+			if err != nil {
+				nl.Error("[server][EstablishConnection][logout]", "error", err)
+			} else {
+				c.WriteMessage(logoutResponseData)
+			}
+
 		}
+
 	}
 
 	return nil
